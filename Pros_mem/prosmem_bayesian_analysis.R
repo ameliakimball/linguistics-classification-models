@@ -1,25 +1,25 @@
+library(rstan)
+library(ggplot2)
 
-rm(list=ls())
+rstan_options(auto_write = TRUE)
 
 # loading the data frame with the results
-data <- read.csv("Final_data_Aug_15_step_pairs.csv")
+data <- read.csv("Pros_mem/anonymized_final_data_prosmem.csv")
 summary(data)
 
 # make subject a factor
-data$SUBJ_SHORT <- as.factor(data$SUBJ_SHORT)
-data$TIME_LAG<-as.factor(data$TIME_LAG)
-data$STEP_PAIR_COLL<-as.factor(data$STEP_PAIR_COLL)
+data$ANON_SUBJ      <- as.factor(data$ANON_SUBJ)
+data$TIME_LAG       <- as.factor(data$TIME_LAG)
+data$STEP_PAIR_COLL <- as.factor(data$STEP_PAIR_COLL)
 
 # transforming the dv into a numeric (1/0)
-data$dv <- ifelse(data$CORR_RESP=="CORR",1, ifelse(data$accuracy=="WRONG",0,NA))
+data$dv <- ifelse(data$USER_CORR=="CORR",1,0)
 
 #set up forward difference coding for time lag 
 my.forward.diff.4 = matrix(c(3/4, -1/4, -1/4, -1/4, 1/2, 1/2, -1/2, -1/2,
                              1/4, 1/4, 1/4, -3/4), ncol = 3)
 #apply forward difference coding to the contrasts
 contrasts(data$TIME_LAG)<-my.forward.diff.4
-
-
 
 # create a df with only different data
 diff_data<-subset(data,data$CORR_RESP=="DIFF")
@@ -32,7 +32,7 @@ table(diff_data$TIME_LAG,diff_data$USER_CORR)
 #drop unused levels in all variables to be used in model ( STEP_PAIR_COLL, SUBJ_SHORT,TIME_LAG, EXPERIMENT)
 diff_data$CORR_RESP<-droplevels(diff_data$CORR_RESP)
 diff_data$STEP_PAIR_COLL<-droplevels(diff_data$STEP_PAIR_COLL)
-diff_data$SUBJ_SHORT<-droplevels(diff_data$SUBJ_SHORT)
+diff_data$ANON_SUBJ<-droplevels(diff_data$ANON_SUBJ)
 diff_data$TIME_LAG<-droplevels(diff_data$TIME_LAG)
 diff_data$EXPERIMENT<-droplevels(diff_data$EXPERIMENT)
 
@@ -87,7 +87,7 @@ attr(x_w, "assign") <- NULL
 # data list
 stanDat <- list(accuracy = as.integer(diff_data$USER_CORR),         # dependent variable
                 
-                subj=as.numeric(factor(diff_data$SUBJ_SHORT)),  # subject id
+                subj=as.numeric(factor(diff_data$ANON_SUBJ)),  # subject id
                 item=as.numeric(factor(diff_data$FILE1)),   # item id
                 
                 N_obs = nrow(data),                     # number of observations
@@ -100,7 +100,7 @@ stanDat <- list(accuracy = as.integer(diff_data$USER_CORR),         # dependent 
                 x_u = x_u,                               # random effects matrix - subjects
                 x_w = x_w,                               # random effects matrix - items
                 
-                N_subj=length(unique(diff_data$SUBJ_SHORT)),         # number of subjects
+                N_subj=length(unique(diff_data$ANON_SUBJ)),         # number of subjects
                 N_item=length(unique(diff_data$FILE1)) )  # number of items
 
 # model code
@@ -216,7 +216,7 @@ generated quantities{
 }"
 
 # fitting the model
-library(rstan)
+
 fit <- stan(model_code=model_code_glmm, 
             data=stanDat,
             iter=3000, # number of iterations in each chain
@@ -239,9 +239,7 @@ fit <- as.data.frame(fit)
 save(fit, file="fit.RData")
 
 
-
-
-fit<-load(file="/Users/post-doc/Downloads/fit.RData")
+#fit<-load(file="fit.RData")
 
 fit<-as.data.frame(fit)
 
@@ -280,7 +278,7 @@ for (i in 1:nrow(df)){
 }
 
 write.csv(df, file="beta_summary.csv")
-library(ggplot2)
+
 # plotting the posteriors
 ggplot(data=df, aes(x=mean, y=effect)) + theme_bw() +
   geom_vline(aes(xintercept=0), size=1, linetype=2, col=gray(0.2)) + 
